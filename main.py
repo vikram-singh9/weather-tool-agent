@@ -3,12 +3,54 @@ from dotenv import load_dotenv
 from agents import AsyncOpenAI,OpenAIChatCompletionsModel,Agent,Runner,set_tracing_disabled,function_tool
 import asyncio
 import chainlit as cl
+import requests
+
 load_dotenv()
 set_tracing_disabled(True)
 
+
+
+
+
 @function_tool
-def get_weather(city:str):
-    return f"The weather in {city} is sunny with a temperature of 25Â°C."
+def get_weather(city: str) -> str:
+    """
+    Get real-time weather information for a given city using OpenWeatherMap API.
+    """
+    api_key = os.getenv("OPENWEATHER_API_KEY")
+    if not api_key:
+        return "OpenWeatherMap API key is not set."
+
+    url = "https://api.openweathermap.org/data/2.5/weather"
+    params = {
+        "q": city,
+        "appid": api_key,
+        "units": "metric"
+    }
+
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        description = data["weather"][0]["description"].capitalize()
+        temperature = data["main"]["temp"]
+        feels_like = data["main"]["feels_like"]
+        humidity = data["main"]["humidity"]
+
+        return (
+            f"The current weather in {city} is {description} with a temperature of "
+            f"{temperature}°C (feels like {feels_like}°C) and humidity at {humidity}%."
+        )
+
+    except requests.RequestException as e:
+        return f"Failed to fetch weather data for {city}: {e}"
+
+    except KeyError:
+        return f"Sorry, could not find weather info for '{city}'."
+
+
+
 
 @cl.on_chat_start
 async def start():
@@ -33,7 +75,7 @@ async def start():
 
     assistant = Agent(
         name = "weather assistant",
-        instructions= f"You are a helpful assistant that provides weather information for cities.",
+        instructions= f"You are a helpful assistant that provides real time weather information.",
         model=model,
         tools=[get_weather]
     )
